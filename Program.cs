@@ -12,7 +12,7 @@ var buyLines = lines.Where(x => x.StartsWith("Trades,Data,Order,Stocks") && (x.C
 var soldLines = lines.Where(x => x.StartsWith("Trades,Data,Order,Stocks") && !x.Contains("O;") && !x.EndsWith(",O"));
 foreach (var line in soldLines)
 {
-    Console.WriteLine(line);
+    //Console.WriteLine(line);
 }
 
 foreach (var line in buyLines.OrderBy(x => x))
@@ -76,7 +76,11 @@ foreach (var openPositionLine in openPositionsLines)
 
 
 var taxTotal = 0M;
-var taxTotal2 = 0M;
+var taxTotal13 = 0M;
+
+
+var curPriceUsdTotal = 0M;
+var curPriceRubTotal = 0M;
 foreach (var d in buyRub.OrderByDescending(x => x.Value))
 {
     if (!openPositions.ContainsKey(d.Key))
@@ -85,16 +89,23 @@ foreach (var d in buyRub.OrderByDescending(x => x.Value))
     var paydUsd = buyUsd[d.Key];
 
     var currentPrice = openPositions.ContainsKey(d.Key) ? openPositions[d.Key] : 0M;
+    curPriceUsdTotal += currentPrice;
+
     var curPriceRub = currentPrice * 90;
+    curPriceRubTotal += curPriceRub;
+
     var profit = curPriceRub - d.Value;
     var tax = profit * 0.15M;
     taxTotal += tax;
-    taxTotal2 += profit * 0.13M;
+    taxTotal13 += profit * 0.13M;
     Console.WriteLine($"{d.Key}\t{paydUsd:0}\t{d.Value:0}\t{currentPrice:0}\t{curPriceRub:0}\t{profit:0}\t{tax:0}");
 }
 
 Console.WriteLine(taxTotal);
-Console.WriteLine(taxTotal2);
+Console.WriteLine(taxTotal13);
+Console.WriteLine(curPriceRubTotal/1000000);
+Console.WriteLine((curPriceRubTotal - taxTotal)/1000000);
+Console.WriteLine(curPriceUsdTotal);
 
 public partial class CurrencyRate
 {
