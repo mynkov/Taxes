@@ -1,23 +1,23 @@
 ﻿using Newtonsoft.Json;
 
-var ibDividendReportPath = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csv");
+var ibReportsPath = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csv");
 
-var lines = ibDividendReportPath.SelectMany(x => File.ReadAllLines(x));
+var lines = ibReportsPath.SelectMany(x => File.ReadAllLines(x));
 
-var lines2024 = File.ReadAllLines(ibDividendReportPath.Where(x => x.Contains("2024")).Single());
+var lines2024 = File.ReadAllLines(ibReportsPath.Where(x => x.Contains("2024")).Single());
 var openPositionsLines = lines2024.Where(x => x.StartsWith("Open Positions,Data,Summary"));
 
 
 var buyLines = lines.Where(x => x.StartsWith("Trades,Data,Order,Stocks") && (x.Contains("O;") || x.EndsWith(",O")));
 var soldLines = lines.Where(x => x.StartsWith("Trades,Data,Order,Stocks") && !x.Contains("O;") && !x.EndsWith(",O"));
-foreach(var line in soldLines)
+foreach (var line in soldLines)
 {
     Console.WriteLine(line);
 }
 
-foreach(var line in buyLines.OrderBy(x => x))
+foreach (var line in buyLines.OrderBy(x => x))
 {
-    Console.WriteLine(line);
+    //Console.WriteLine(line);
 }
 
 
@@ -32,41 +32,41 @@ foreach (var taxLine in buyLines)
     var lineItems = taxLine.Split(',');
 
 
-        var currency = lineItems[4];
-        var dateLine = lineItems[6].Replace("\"", "");
-        var date = DateOnly.Parse(dateLine);
-   
-        var buyValueUsd = decimal.Parse(lineItems[13]);
-        var ticker = lineItems[5];
+    var currency = lineItems[4];
+    var dateLine = lineItems[6].Replace("\"", "");
+    var date = DateOnly.Parse(dateLine);
 
-        if (currency != "USD")
-            throw new Exception($"Unknown currency '{currency}'");
+    var buyValueUsd = decimal.Parse(lineItems[13]);
+    var ticker = lineItems[5];
 
-                    var dateFormat = "yyyy-MM-dd";
-        var incomeDate = date;
-        var incomeDateString1 = incomeDate.ToString(dateFormat);
+    if (currency != "USD")
+        throw new Exception($"Unknown currency '{currency}'");
 
-        var incomeDateResponse = await httpClient.GetStringAsync($"https://lkfl2.nalog.ru/taps/api/v1/dictionary/currency-rates?code={840}&date={incomeDateString1}");
-        var incomeDateCurrencyRate = JsonConvert.DeserializeObject<CurrencyRate>(incomeDateResponse);
+    var dateFormat = "yyyy-MM-dd";
+    var incomeDate = date;
+    var incomeDateString1 = incomeDate.ToString(dateFormat);
 
-             var byuValueRub = (decimal)incomeDateCurrencyRate.Rate * buyValueUsd;
+    var incomeDateResponse = await httpClient.GetStringAsync($"https://lkfl2.nalog.ru/taps/api/v1/dictionary/currency-rates?code={840}&date={incomeDateString1}");
+    var incomeDateCurrencyRate = JsonConvert.DeserializeObject<CurrencyRate>(incomeDateResponse);
+
+    var byuValueRub = (decimal)incomeDateCurrencyRate.Rate * buyValueUsd;
 
 
-        if(!buyRub.ContainsKey(ticker))
-        {
-            buyRub.Add(ticker, byuValueRub);
-            buyUsd.Add(ticker, buyValueUsd);
-        }
-else
-{
-    buyRub[ticker]+= byuValueRub;
-    buyUsd[ticker] += buyValueUsd;
+    if (!buyRub.ContainsKey(ticker))
+    {
+        buyRub.Add(ticker, byuValueRub);
+        buyUsd.Add(ticker, buyValueUsd);
+    }
+    else
+    {
+        buyRub[ticker] += byuValueRub;
+        buyUsd[ticker] += buyValueUsd;
+    }
 }
-}
 
-var openPositions = new Dictionary<string, decimal>{};
+var openPositions = new Dictionary<string, decimal> { };
 
-    foreach (var openPositionLine in openPositionsLines)
+foreach (var openPositionLine in openPositionsLines)
 {
     var lineItems = openPositionLine.Split(',');
     var ticker = lineItems[5];
@@ -75,11 +75,11 @@ var openPositions = new Dictionary<string, decimal>{};
 }
 
 
-    var taxTotal = 0M;
-     var taxTotal2 = 0M;
-foreach(var d in buyRub.OrderByDescending(x => x.Value))
+var taxTotal = 0M;
+var taxTotal2 = 0M;
+foreach (var d in buyRub.OrderByDescending(x => x.Value))
 {
-    if(!openPositions.ContainsKey(d.Key))
+    if (!openPositions.ContainsKey(d.Key))
         continue;
 
     var paydUsd = buyUsd[d.Key];
