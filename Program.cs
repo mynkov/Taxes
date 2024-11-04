@@ -43,6 +43,7 @@ var httpClient = new HttpClient();
 
 var openPositions = new Dictionary<string, decimal> { };
 var sellCount = new Dictionary<string, decimal> { };
+var canUseLdvDic = new Dictionary<string, bool> { };
 decimal totalSell = 0;
 
 var incomeDateString2 = "2024-10-31";
@@ -127,6 +128,11 @@ foreach (var line in lastSoldLines)
 
     totalSell += -buyValueUsd;
 
+    var ldvResponse = await httpClient.GetStringAsync($"https://spbexchange.ru/api/listing/v1/instruments/eng/list?page=0&size=10&sortBy=instrumentKind&sortByDirection=desc&searchText={ticker}");
+    var canUseLdv = !ldvResponse.Contains("\"content\":[]") && ldvResponse.Contains($"\"{ticker}\"");
+
+    canUseLdvDic.Add(ticker, canUseLdv);
+
     //Console.WriteLine(ticker + '\t' + -buyValueUsd);
 }
 
@@ -194,8 +200,11 @@ foreach (var taxLine in buyLines.OrderBy(x => x))
 
     prevTicker = ticker;
 
+    var canUseLdv = canUseLdvDic.ContainsKey(ticker) && canUseLdvDic[ticker];
+
+    Console.WriteLine(canUseLdv);
     // лдв
-    if (incomeDate >= new DateOnly(2021, 10, 31))
+    if (incomeDate >= new DateOnly(2021, 10, 31) || !canUseLdv)
     {
         if (!buyRub.ContainsKey(ticker))
         {
@@ -208,7 +217,7 @@ foreach (var taxLine in buyLines.OrderBy(x => x))
             buyUsd[ticker] += buyValueWithCommissionUsd;
         }
     }
-    else if (openPositions.ContainsKey(ticker))
+    else if (openPositions.ContainsKey(ticker) && canUseLdv)
     {
         var sellValue = openPositions[ticker];
 
