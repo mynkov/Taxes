@@ -51,19 +51,19 @@ var incomeDateResponse2 = await httpClient.GetStringAsync($"https://lkfl2.nalog.
 var incomeDateCurrencyRate2 = JsonConvert.DeserializeObject<CurrencyRate>(incomeDateResponse2);
 var sellDayRate = (decimal)incomeDateCurrencyRate2.Rate;
 
-Console.WriteLine(sellDayRate);
+//Console.WriteLine(sellDayRate);
 
 
 var incomeDateResponseEur = await httpClient.GetStringAsync($"https://lkfl2.nalog.ru/taps/api/v1/dictionary/currency-rates?code={978}&date={incomeDateString2}");
 var incomeDateCurrencyRateEur = JsonConvert.DeserializeObject<CurrencyRate>(incomeDateResponseEur);
 var buyEurRate = (decimal)incomeDateCurrencyRateEur.Rate;
-Console.WriteLine(buyEurRate);
+//Console.WriteLine(buyEurRate);
 
 var totalBuyEur = 0.0M;
 var totalBuyRub = 0.0M;
 foreach (var line in eurByuLines)
 {
-    //break;
+    break;
     var lineItems = line.Split(',');
 
     var currency = lineItems[4];
@@ -88,19 +88,23 @@ foreach (var line in eurByuLines)
 
 var eurInRussia = totalBuyEur - 155 - 10;
 
-Console.WriteLine(totalBuyEur);
-Console.WriteLine(eurInRussia);
-Console.WriteLine(totalBuyRub);
+if (false)
+{
+    Console.WriteLine(totalBuyEur);
+    Console.WriteLine(eurInRussia);
+    Console.WriteLine(totalBuyRub);
 
 
-var totalSellEurRub = eurInRussia * 103;
-Console.WriteLine(totalSellEurRub);
 
-var loss = totalBuyRub - totalSellEurRub;
-var taxLoss = loss * 0.15M;
+    var totalSellEurRub = eurInRussia * 103;
+    Console.WriteLine(totalSellEurRub);
 
-Console.WriteLine(loss);
-Console.WriteLine(taxLoss);
+    var loss = totalBuyRub - totalSellEurRub;
+    var taxLoss = loss * 0.15M;
+
+    Console.WriteLine(loss);
+    Console.WriteLine(taxLoss);
+}
 
 
 foreach (var line in lastSoldLines)
@@ -140,9 +144,12 @@ foreach (var line in lastSoldLines)
 Dictionary<string, decimal> buyRub = new Dictionary<string, decimal>();
 Dictionary<string, decimal> buyUsd = new Dictionary<string, decimal>();
 
+Dictionary<string, decimal> buyRubLdv = new Dictionary<string, decimal>();
+Dictionary<string, decimal> buyUsdLdv = new Dictionary<string, decimal>();
+
 
 var prevTicker = "AZN";
-Console.WriteLine("Тикер\tОперация\tДата\tСтоимость в долларах\tКурс ЦБ\tСтоимость в рублях\tКоличество");
+Console.WriteLine("Тикер\tОперация\tДата\tСтоимость в долларах\tКурс ЦБ\tСтоимость в рублях\tКоличество\tТоргуется на СПБ\tПрименимо ЛДВ\tПрименимо ЛДВ по дате");
 foreach (var taxLine in buyLines.OrderBy(x => x))
 {
     var lineItems = taxLine.Split(',');
@@ -171,53 +178,33 @@ foreach (var taxLine in buyLines.OrderBy(x => x))
     var count = decimal.Parse(lineItems[8]);
     var commission = decimal.Parse(lineItems[12]);
 
-
+    var canUseLdv = canUseLdvDic.ContainsKey(ticker) && canUseLdvDic[ticker];
+    var canUseLdvByDate = incomeDate <= new DateOnly(2021, 10, 31);
+    var canUseLdvByDateText = canUseLdv && canUseLdvByDate ? "Да" : "Нет";
 
     if (prevTicker != ticker && openPositions.ContainsKey(prevTicker))
     {
-        var sellValueUsd = openPositions[prevTicker];
-
-        var sellValueRub = sellValueUsd * sellDayRate;
-        var sellCount1 = sellCount[prevTicker];
-
-        Console.WriteLine($"{prevTicker}\tПРОДАЖА\t{incomeDateString2}\t{sellValueUsd}\t{sellDayRate}\t{sellValueRub}\t{-sellCount1}");
-        var byuRub = buyRub[prevTicker];
-        var byuUsd = buyUsd[prevTicker];
-        var profit = sellValueRub - byuRub;
-        var tax15 = profit * 0.15M;
-        var tax13 = profit * 0.13M;
-        //Console.WriteLine($"{byuUsd}\t{sellValueUsd}\t{sellValueUsd - byuUsd}");
-        //Console.WriteLine($"{byuRub}\t{sellValueRub}\t{profit}t{tax13}\t{tax15}");
-        Console.WriteLine();
-        Console.WriteLine($"Налогооблагаемая база\t{profit}\tНалог 13%\t{tax13}\tНалог 15%\t{tax15}");
-        Console.WriteLine();
-        Console.WriteLine();
+        PrintSell();
     }
     if (openPositions.ContainsKey(ticker))
     {
-        Console.WriteLine($"{ticker}\tПОКУПКА\t{incomeDateString1}\t{buyValueWithCommissionUsd}\t{incomeDateRate}\t{byuValueWithCommissionRub}\t{count}");
+        Console.WriteLine($"{ticker}\tПОКУПКА\t{incomeDateString1}\t{buyValueWithCommissionUsd}\t{incomeDateRate}\t{byuValueWithCommissionRub}\t{count}\t{"   "}\t{"   "}\t{canUseLdvByDateText}");
     }
 
     prevTicker = ticker;
 
-    var canUseLdv = canUseLdvDic.ContainsKey(ticker) && canUseLdvDic[ticker];
-
-    Console.WriteLine(canUseLdv);
-    // лдв
-    if (incomeDate >= new DateOnly(2021, 10, 31) || !canUseLdv)
+    if (!buyRub.ContainsKey(ticker))
     {
-        if (!buyRub.ContainsKey(ticker))
-        {
-            buyRub.Add(ticker, byuValueWithCommissionRub);
-            buyUsd.Add(ticker, buyValueWithCommissionUsd);
-        }
-        else
-        {
-            buyRub[ticker] += byuValueWithCommissionRub;
-            buyUsd[ticker] += buyValueWithCommissionUsd;
-        }
+        buyRub.Add(ticker, byuValueWithCommissionRub);
+        buyUsd.Add(ticker, buyValueWithCommissionUsd);
     }
-    else if (openPositions.ContainsKey(ticker) && canUseLdv)
+    else
+    {
+        buyRub[ticker] += byuValueWithCommissionRub;
+        buyUsd[ticker] += buyValueWithCommissionUsd;
+    }
+    // лдв
+    if (openPositions.ContainsKey(ticker) && canUseLdv && canUseLdvByDate)
     {
         var sellValue = openPositions[ticker];
 
@@ -227,41 +214,85 @@ foreach (var taxLine in buyLines.OrderBy(x => x))
         var newSellValueUsd = count * price;
         var newSellValueRub = newSellValueUsd * sellDayRate;
 
-        if (!buyRub.ContainsKey(ticker))
+        if (byuValueWithCommissionRub > newSellValueRub)
         {
-            buyRub.Add(ticker, newSellValueRub);
-            buyUsd.Add(ticker, newSellValueUsd);
+            newSellValueRub = byuValueWithCommissionRub;
+        }
+        if (buyValueWithCommissionUsd > newSellValueUsd)
+        {
+            newSellValueUsd = buyValueWithCommissionUsd;
+        }
+
+        if (!buyRubLdv.ContainsKey(ticker))
+        {
+            buyRubLdv.Add(ticker, newSellValueRub);
+            buyUsdLdv.Add(ticker, newSellValueUsd);
         }
         else
         {
-            buyRub[ticker] += newSellValueRub;
-            buyUsd[ticker] += newSellValueUsd;
+            buyRubLdv[ticker] += newSellValueRub;
+            buyUsdLdv[ticker] += newSellValueUsd;
+        }
+    }
+    else
+    {
+        if (!buyRubLdv.ContainsKey(ticker))
+        {
+            buyRubLdv.Add(ticker, byuValueWithCommissionRub);
+            buyUsdLdv.Add(ticker, buyValueWithCommissionUsd);
+        }
+        else
+        {
+            buyRubLdv[ticker] += byuValueWithCommissionRub;
+            buyUsdLdv[ticker] += buyValueWithCommissionUsd;
         }
     }
 
     if (ticker == "XOM")
     {
+        PrintSell();
+    }
+
+    void PrintSell()
+    {
         var sellValueUsd = openPositions[prevTicker];
 
         var sellValueRub = sellValueUsd * sellDayRate;
         var sellCount1 = sellCount[prevTicker];
+        var canUseLdvPrev = canUseLdvDic.ContainsKey(prevTicker) && canUseLdvDic[prevTicker];
+        var canUseLdvText = canUseLdvPrev ? "Да" : "Нет";
 
-        Console.WriteLine($"{prevTicker}\tПРОДАЖА\t{incomeDateString2}\t{sellValueUsd}\t{sellDayRate}\t{sellValueRub}\t{-sellCount1}");
+        Console.WriteLine($"{prevTicker}\tПРОДАЖА\t{incomeDateString2}\t{sellValueUsd}\t{sellDayRate}\t{sellValueRub}\t{-sellCount1}\t{canUseLdvText}\t{canUseLdvText}\t{"   "}");
         var byuRub = buyRub[prevTicker];
         var byuUsd = buyUsd[prevTicker];
+
         var profit = sellValueRub - byuRub;
         var tax15 = profit * 0.15M;
         var tax13 = profit * 0.13M;
+
+        if (profit < 0)
+        {
+            //buyRubLdv[prevTicker] = byuRub;
+        }
+
+        var byuRubLdv = buyRubLdv[prevTicker];
+
+
+        var profitLdv = sellValueRub - byuRubLdv;
+        var profitLdvWithZero = profitLdv < 0.001M && profitLdv > -0.001M ? 0 : profitLdv;
+        var tax15Ldv = profitLdvWithZero * 0.15M;
+        var tax13Ldv = profitLdvWithZero * 0.13M;
         //Console.WriteLine($"{byuUsd}\t{sellValueUsd}\t{sellValueUsd - byuUsd}");
         //Console.WriteLine($"{byuRub}\t{sellValueRub}\t{profit}t{tax13}\t{tax15}");
         Console.WriteLine();
         Console.WriteLine($"Налогооблагаемая база\t{profit}\tНалог 13%\t{tax13}\tНалог 15%\t{tax15}");
-        Console.WriteLine();
+        Console.WriteLine($"Налогооблагаемая база после ЛДВ\t{profitLdvWithZero}\tНалог 13%\t{tax13Ldv}\tНалог 15%\t{tax15Ldv}");
+        Console.WriteLine("\t");
         Console.WriteLine();
     }
 }
 
-Console.WriteLine();
+Console.WriteLine("\t");
 
 
 
@@ -283,6 +314,7 @@ var curPriceUsdTotal = 0M;
 var curPriceRubTotal = 0M;
 var usdProfitTotal = 0M;
 var rubProfitTotal = 0M;
+var rubProfitTotalLdv = 0M;
 
 
 
@@ -302,28 +334,45 @@ foreach (var d in buyRub.OrderByDescending(x => x.Value))
     usdProfitTotal += currentPrice - paydUsd;
 
     var profit = curPriceRub - d.Value;
+    var profitLdv = curPriceRub - buyRubLdv[d.Key];
 
 
     rubProfitTotal += profit;
+    rubProfitTotalLdv += profitLdv;
 
     var tax13 = profit * 0.13M;
     var tax15 = profit * 0.15M;
     taxTotal13 += tax13;
     taxTotal15 += tax15;
-    Console.WriteLine($"{d.Key}\t{paydUsd:0}\t{d.Value:0}\t{currentPrice:0}\t{curPriceRub:0}\t{profit:0}\t{tax13:0}\t{tax15:0}");
+
+    //Console.WriteLine($"{d.Key}\t{paydUsd:0}\t{d.Value:0}\t{currentPrice:0}\t{curPriceRub:0}\t{profit:0}\t{tax13:0}\t{tax15:0}");
 }
 
-Console.WriteLine(rubProfitTotal);
-Console.WriteLine(taxTotal13);
-Console.WriteLine(taxTotal15);
-Console.WriteLine(curPriceRubTotal / 1000000);
-Console.WriteLine((curPriceRubTotal - taxTotal13) / 1000000);
-Console.WriteLine(curPriceUsdTotal);
-Console.WriteLine(usdProfitTotal);
+if (false)
+{
+    Console.WriteLine(rubProfitTotal);
+    Console.WriteLine(taxTotal13);
+    Console.WriteLine(taxTotal15);
+    Console.WriteLine(curPriceRubTotal / 1000000);
+    Console.WriteLine((curPriceRubTotal - taxTotal13) / 1000000);
+    Console.WriteLine(curPriceUsdTotal);
+    Console.WriteLine(usdProfitTotal);
+}
 
 
 Console.WriteLine("ИТОГО");
 Console.WriteLine($"Налогооблагаемая база\t{rubProfitTotal}\tНалог 13%\t{taxTotal13}\tНалог 15%\t{taxTotal15}");
+
+Console.WriteLine();
+Console.WriteLine("ИТОГО (после применения ЛДВ)");
+Console.WriteLine($"Налогооблагаемая база\t{rubProfitTotalLdv}\tНалог 13%\t{rubProfitTotalLdv * 0.13M}\tНалог 15%\t{rubProfitTotalLdv * 0.15M}");
+
+var tinkoffLoss = 2000000.0M;
+var saldo = rubProfitTotalLdv - tinkoffLoss;
+Console.WriteLine();
+Console.WriteLine("ИТОГО (после сальдирования убытков и ЛДВ)");
+Console.WriteLine($"Убытки у брокера Тинькофф\t{tinkoffLoss}");
+Console.WriteLine($"Налогооблагаемая база\t{saldo}\tНалог 13%\t{saldo * 0.13M}\tНалог 15%\t{saldo * 0.15M}");
 
 public partial class CurrencyRate
 {
